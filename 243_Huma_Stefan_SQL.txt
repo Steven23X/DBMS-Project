@@ -1,0 +1,196 @@
+-- Cerinta 4
+-- Crearea secventei pentru cheile primare.
+
+create sequence secventa_techflow
+start with 1
+increment by 1
+maxvalue 10000
+minvalue 1
+nocycle
+nocache;
+
+-- 1 tabel MAGAZINE
+
+create table magazine (
+    id_magazin number(4),
+    nume_magazin varchar2(30) constraint nn_nume_magazin not null,
+    adresa_magazin varchar2(40) constraint nn_adresa_magazin not null,
+    
+    constraint pk_id_magazin primary key(id_magazin)
+);
+
+-- 2 tabel ANGAJATI
+
+create table angajati (
+    id_angajat number(4),
+    nume_angajat varchar2(50) constraint nn_nume_angajat not null,
+    prenume_angajat varchar2(50) constraint nn_prenume_angajat not null,
+    email_angajat varchar2(50),
+    salariu_angajat number(10,2) constraint nn_salariu_angajat not null,
+    job_angajat varchar2(50),
+    id_magazin number(4),
+    
+    constraint pk_id_angajat primary key(id_angajat),
+    constraint fk_id_magazin foreign key(id_magazin)
+    references magazine(id_magazin)
+);
+
+-- 3 tabel PRODUCATORI
+
+create table producatori (
+    id_producator number(4),
+    nume_producator varchar2(50) constraint nn_nume_producator not null,
+    tara_producator varchar(50),
+    
+    constraint pk_id_producator primary key(id_producator)
+);    
+
+-- 4 tabel CATEGORII
+
+create table categorii (
+    id_categorie number(4),
+    nume_categorie varchar2(50) constraint nn_nume_categorie not null,
+    descriere_categorie varchar2(200),
+    
+    constraint pk_id_categorie primary key(id_categorie)
+);
+
+-- 5 tabel PRODUSE
+
+create table produse (
+    id_produs number(4),
+    nume_produs varchar2(50) constraint nn_nume_produs not null,
+    descriere_produs varchar2(200),
+    pret_produs number(10,2),
+    stoc_produs number(3),
+    id_producator number(4),
+    id_categorie number(4),
+    
+    constraint pk_id_produs primary key(id_produs),
+    constraint fk_id_producator foreign key(id_producator)
+    references producatori(id_producator),
+    constraint fk_id_categorie foreign key(id_categorie)
+    references categorii(id_categorie)
+);
+
+-- 6 tabel PRODUSE_MAGAZINE
+
+create table produse_magazine (
+    id_produs number(4),
+    id_magazin number(4),
+    
+    constraint pk_id_produs_id_magazin primary key(id_produs,id_magazin),
+    constraint fk_id_produs_pm foreign key(id_produs)
+    references produse(id_produs),
+    constraint fk_id_magazin_pm foreign key(id_magazin)
+    references magazine(id_magazin)
+);
+
+-- 7 tabel PLATI
+
+create table plati (
+    id_plata number(4),
+    total_plata number(10,2) constraint nn_total_plata not null,
+    tip_plata varchar2(50) constraint nn_tip_plata not null,
+    
+    constraint pk_id_plata primary key(id_plata)
+);
+
+-- 8 tabel TRANSPORT
+
+create table transport (
+    id_transport number(4),
+    firma_transport varchar2(50) constraint nn_firma_transport not null,
+    cost_transport number(10,2) constraint nn_cost_transport not null,
+    
+    constraint pk_id_transport primary key (id_transport)
+);
+
+-- 9 tabel CLIENTI
+
+create table clienti (
+    id_client number(4),
+    nume_client varchar2(50),
+    prenume_client varchar2(50),
+    email_client varchar2(35),
+    telefon_client varchar2(20),
+    data_inregistrare date,
+    
+    constraint pk_id_client primary key (id_client)
+);
+
+-- 10 tabel COMENZI
+
+create table comenzi (
+    id_comanda number(4),
+    data_plasare date,
+    status_comanda varchar2(50),
+    id_client number(4),
+    id_plata number(4),
+    id_transport number(4),
+    
+    constraint pk_id_comanda primary key (id_comanda),
+    constraint fk_id_client foreign key (id_client)
+    references clienti(id_client),
+    constraint fk_id_plata foreign key (id_plata)
+    references plati(id_plata),
+    constraint fk_id_transport foreign key (id_transport)
+    references transport(id_transport)
+);
+
+-- 11 tabel PRODUSE_COMENZI
+
+create table produse_comenzi (
+    id_produs number(4),
+    id_comanda number(4),
+    
+    constraint pk_id_produs_id_comanda primary key(id_produs,id_comanda),
+    constraint fk_id_produs_pc foreign key(id_produs)
+    references produse(id_produs),
+    constraint fk_id_comanda_pc foreign key(id_comanda)
+    references comenzi(id_comanda)
+);
+
+-- 12 tabel WISHLIST
+
+create table wishlist (
+    id_wishlist number(4),
+    data_adaugare date,
+    id_client number(4),
+    
+    constraint pk_id_wishlist primary key (id_wishlist),
+    constraint fk_id_client_wl foreign key (id_client)
+    references clienti(id_client)
+);
+
+-- 13 tabel PRODUSE_WISHLIST
+
+create table produse_wishlist (
+    id_produs number(4),
+    id_wishlist number(4),
+    
+    constraint pk_id_produs_id_wishlist primary key(id_produs,id_wishlist),
+    constraint fk_id_produs_pw foreign key(id_produs)
+    references produse(id_produs),
+    constraint fk_id_wishlist_pw foreign key(id_wishlist)
+    references wishlist(id_wishlist)
+);
+
+-- 14 tabel RECENZII
+
+create table recenzii (
+    id_recenzie number(4),
+    nota_recenzie number(2,1),
+    id_client number(4),
+    id_produs number(4),
+    
+    constraint pk_id_recenzie primary key (id_recenzie),
+    constraint fk_id_client_rz foreign key (id_client)
+    references clienti(id_client),
+    constraint fk_id_produs_rz foreign key (id_produs)
+    references produse(id_produs)
+);
+
+-- Cerinta 5
+
+
