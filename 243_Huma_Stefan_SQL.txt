@@ -560,4 +560,101 @@ values (secventa_techflow.nextval, 3.5, 50, 30);
 
 select * from recenzii;
 
+-- Cerinta 6
 
+-- Pentru primele 5 produse (varray) in ordine alfabetica dupa nume sa se afiseze 
+-- codul, numele, pretul, stocul, in ce magazine se afla (t indexat) si recenziile
+-- lasate de clienti (t imbr).
+
+
+create or replace procedure produse_info as
+
+    -- varray de record-uri pentru produse
+    type prod_rec is record (
+                    cod_prod produse.id_produs%type,
+                    nume produse.nume_produs%type,
+                    pret produse.pret_produs%type,
+                    stoc produse.stoc_produs%type
+                    );
+    type prod_vec is varray(5) of prod_rec;
+    t_prod prod_vec := prod_vec();
+    
+    -- tablou indexat pentru magazine
+    type mag_rec is record (
+                    nume magazine.nume_magazin%type,
+                    adresa magazine.adresa_magazin%type
+                    );
+    type mag_ind is table of mag_rec index by binary_integer;
+    t_mag mag_ind;
+    
+    -- tablou imbricat pentru recenzii
+    type recenzii_rec is record (
+                        nota recenzii.nota_recenzie%type,
+                        nume_client clienti.nume_client%type
+                        );
+    type rec_imbr is table of recenzii_rec;
+    t_recenzii rec_imbr := rec_imbr();
+
+begin
+    
+    dbms_output.put_line('######## Informatii despre produse - magazine - recenzii ########');
+    dbms_output.new_line();
+    
+    -- atribuire produse
+    select id_produs,nume_produs,pret_produs,stoc_produs bulk collect into t_prod
+    from produse
+    order by nume_produs
+    fetch first 5 rows only;
+    
+    for i in t_prod.first..t_prod.last loop
+        -- afisare info produs
+        dbms_output.put_line('Produsul ' || i);
+        dbms_output.put_line('################');
+        dbms_output.put_line('Id: ' || t_prod(i).cod_prod || ' Nume: ' || t_prod(i).nume);
+        dbms_output.put_line('Pret: ' || t_prod(i).pret || ' Stoc: ' || t_prod(i).stoc);
+        dbms_output.put_line('################');
+        
+        -- atribuire magazine
+        select m.nume_magazin,m.adresa_magazin bulk collect into t_mag
+        from magazine m
+        join produse_magazine pm on (m.id_magazin = pm.id_magazin)
+        where pm.id_produs = t_prod(i).cod_prod;
+        
+        -- afisare info magazin
+        if t_mag.count = 0 then
+            dbms_output.put_line('Produsul nu se afla intr-un magazin!');
+            dbms_output.new_line;
+        else
+            dbms_output.put_line('Magazine: ');
+            for j in t_mag.first..t_mag.last loop
+                dbms_output.put_line('Magazinul ' || j);
+                dbms_output.put_line('Nume: ' || t_mag(j).nume || ' Adresa: ' || t_mag(j).adresa);
+                dbms_output.new_line();
+            end loop;
+        end if;
+        dbms_output.put_line('################');
+        
+        -- atribuire recenzii
+        select r.nota_recenzie,c.nume_client bulk collect into t_recenzii
+        from recenzii r
+        join clienti c on (r.id_client = c.id_client)
+        where r.id_produs = t_prod(i).cod_prod;
+        
+        -- afisare recenzii
+        if t_recenzii.count = 0 then
+            dbms_output.put_line('Produsul nu are recenzii!');
+            dbms_output.new_line;
+        else
+            dbms_output.put_line('Recenzii: ');
+            for k in t_recenzii.first..t_recenzii.last loop
+                dbms_output.put_line('Recenzia ' || k);
+                dbms_output.put_line('Nota: ' || t_recenzii(k).nota || ' Nume Client: ' || t_recenzii(k).nume_client);
+                dbms_output.new_line();
+            end loop;
+        end if;
+        dbms_output.new_line();
+    end loop;
+end produse_info;
+/
+
+execute produse_info;
