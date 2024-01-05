@@ -283,6 +283,9 @@ values (secventa_techflow.nextval, 'Memorii RAM', 'Categorie dedicata modulelor 
 insert into categorii
 values (secventa_techflow.nextval, 'Stocare ROM', 'Categorie dedicata solutiilor de stocare');
 
+insert into categorii
+values (secventa_techflow.nextval, 'Microfoane', 'Categorie dedicata microfoanelor');
+
 select * from categorii;
 
 -- 5 tabel PRODUSE
@@ -658,3 +661,100 @@ end produse_info;
 /
 
 execute produse_info;
+
+-- Cerinta 7
+
+-- Pentru fiecare categorie sa se determine primele 2 produse ordonate descrescator dupa stoc (cursor dinamic). Sa
+-- se afiseze detalii despre comenzile care contin produsele determinate anterior (cursor parametrizat).
+
+create or replace procedure comenzi_info as
+    
+    type com_rec is record (
+                    data_plasare comenzi.data_plasare%type,
+                    status_comanda comenzi.status_comanda%type,
+                    total_plata plati.total_plata%type,
+                    tip_plata plati.tip_plata%type                    
+                    );
+    
+    type prod_rec is record (
+                    nume produse.nume_produs%type,
+                    id_produs produse.id_produs%type
+                    );
+    
+    type t_prod is table of prod_rec
+    index by binary_integer;
+    v_prod t_prod;
+    
+    v_com com_rec;
+    
+    -- cursor dinamic/ expresie cursor
+    -- pentru fiecare categorie se determina produsul cu cel mai mare stoc
+    cursor categorii_info is
+        select id_categorie,nume_categorie,
+            cursor(select max(nume_produs),max(id_produs)
+                   from produse p
+                   where c.id_categorie = p.id_categorie
+                   group by p.id_produs
+                   order by max(stoc_produs) desc)
+        from categorii c;
+                    
+    -- cursor parametrizat pentru comenzi
+    cursor com_info(v_produs produse.id_produs%type) is
+        select c.data_plasare,c.status_comanda,p.total_plata,p.tip_plata
+        from comenzi c
+        join plati p on (c.id_plata = p.id_plata)
+        join produse_comenzi pc on (c.id_comanda = pc.id_comanda)
+        where pc.id_produs = v_produs
+        order by c.data_plasare desc;
+        
+    v_cursor sys_refcursor;
+    
+    v_id_categorie categorii.id_categorie%type;
+    v_nume_categorie categorii.nume_categorie%type;
+    contor number := 1;
+begin
+    dbms_output.put_line('######## Informatii despre categorii - produse - comenzi - plati ########');
+    open categorii_info;
+    loop
+        fetch categorii_info into v_id_categorie,v_nume_categorie,v_cursor;
+        
+        exit when categorii_info%notfound;
+        dbms_output.put_line('Categoria: ' || v_nume_categorie || ' cu id-ul: ' || v_id_categorie);
+        dbms_output.put_line('################');
+        fetch v_cursor bulk collect into v_prod limit 2;
+        dbms_output.new_line;
+        
+        if v_prod.count = 0 then
+            dbms_output.put_line('Nu exista produse!');
+        else
+        for i in v_prod.first..v_prod.last loop
+            dbms_output.put_line('Produs '||i|| '. '|| v_prod(i).nume);
+            dbms_output.put_line('################');
+            open com_info(v_prod(i).id_produs);
+            loop
+                fetch com_info into v_com;
+                exit when com_info%notfound;
+                dbms_output.put_line('Comanda '||contor);
+                dbms_output.put_line('Data Plasare: ' || v_com.data_plasare || ' Status Comanda: ' || v_com.status_comanda);
+                dbms_output.put_line('Total Plata: ' || v_com.total_plata || ' Tip Plata: ' || v_com.tip_plata);
+                dbms_output.new_line;
+                contor := contor + 1;
+            end loop;
+            
+            if com_info%rowcount = 0 then
+                dbms_output.put_line('Nu are comenzi!');
+            end if;
+            close com_info;
+            
+        contor := 1;
+        dbms_output.put_line('################');
+        dbms_output.new_line;
+        end loop;
+        end if;
+        
+        dbms_output.new_line;
+    end loop;
+    close categorii_info;
+end comenzi_info;
+/
+execute comenzi_info;
