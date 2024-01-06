@@ -758,3 +758,137 @@ begin
 end comenzi_info;
 /
 execute comenzi_info;
+
+-- Cerinta 8 
+
+-- Sa se returneze comenzile plasate intr-o anumita perioada care nu depasesc un anumit cost de transport si un anumit cost total.
+create or replace type t_id_com is table of number;
+/
+-- returneaza un tablou de id-uri
+create or replace function filtrare_comenzi
+    (v_data_min date, v_data_max date, v_transport_maxim transport.cost_transport%type, v_cost_total plati.total_plata%type)
+return t_id_com is
+    v_id_com t_id_com;
+    
+    data_eroare exception;
+    transport_eroare exception;
+    cost_total_eroare exception;
+    no_comenzi exception;
+begin
+    
+    if v_data_min > v_data_max then
+        raise data_eroare;
+    end if;
+    
+    if v_transport_maxim < 0 then
+        raise transport_eroare;
+    end if;
+    
+    if v_cost_total < 0 then
+        raise cost_total_eroare;
+    end if;
+
+    -- folosirea a 3 tabele
+    select distinct c.id_comanda bulk collect into v_id_com
+    from comenzi c
+    join plati p on (c.id_plata = p.id_plata)
+    join transport t on (c.id_transport = c.id_transport)
+    where c.data_plasare >= v_data_min and c.data_plasare <= v_data_max
+    and t.cost_transport <= v_transport_maxim
+    and p.total_plata <= v_cost_total;
+
+    if v_id_com.count = 0 then
+        raise no_comenzi;
+    end if;
+    
+    return v_id_com;
+
+exception
+    when no_comenzi then
+        raise_application_error(-20000,'Nu exista comanda cu aceste conditii!');
+    when data_eroare then
+        raise_application_error(-20001,'Intervalul nu este introdus corect!');
+    when transport_eroare then
+        raise_application_error(-20002,'Costul transportului nu poate fi negativ!');
+    when cost_total_eroare then
+        raise_application_error(-20003,'Costul total nu poate fi negativ!');
+    when others then
+        raise_application_error(-20004,'Alta eroare!');
+end filtrare_comenzi;
+/
+
+-- caz 1 apel corect
+declare
+    solutie t_id_com;
+begin
+    dbms_output.put_line('Comenzi intre 10-15 mai 2023 cu totatul de plata mai mic de 5000');
+    dbms_output.put_line('si costul de transport mai mic de 190.');
+    solutie := filtrare_comenzi(to_date('10-may-2023', 'dd-mon-yyyy'),to_date('15-may-2023', 'dd-mon-yyyy'),190,5000);
+    dbms_output.new_line;
+    dbms_output.put_line('Id-uri comenzi care respecta criteriul:');
+    for i in solutie.first..solutie.last loop
+        dbms_output.put_line(solutie(i)|| ' ');
+    end loop;
+end;
+/
+
+-- caz2 exceptie no_comenzi
+-- caz in care nu exista comenzi care sa respecte conditiile
+declare
+    solutie t_id_com;
+begin
+    dbms_output.put_line('Comenzi intre 10-15 mai 2022 cu totatul de plata mai mic de 3000');
+    dbms_output.put_line('si costul de transport mai mic de 100.');
+    dbms_output.new_line;
+    solutie := filtrare_comenzi(to_date('10-may-2022', 'dd-mon-yyyy'),to_date('15-may-2022', 'dd-mon-yyyy'),100,3000);
+exception
+    when others then
+        dbms_output.put_line('Eroare cu codul '||SQLCODE|| ' si mesajul ' || SQLERRM);
+end;
+/
+
+-- caz3 exceptie data_eroare
+-- caz in care data minima este mai mare decat data maxima
+
+declare
+    solutie t_id_com;
+begin
+    dbms_output.put_line('Comenzi intre 15-10 mai 2022 cu totatul de plata mai mic de 3000');
+    dbms_output.put_line('si costul de transport mai mic de 100.');
+    dbms_output.new_line;
+    solutie := filtrare_comenzi(to_date('15-may-2022', 'dd-mon-yyyy'),to_date('10-may-2022', 'dd-mon-yyyy'),100,3000);
+exception
+    when others then
+        dbms_output.put_line('Eroare cu codul '||SQLCODE|| ' si mesajul ' || SQLERRM);
+end;
+/
+
+-- caz4 exceptie transport_eroare 
+-- caz in care costul pentru transport maximal este negativ
+declare
+    solutie t_id_com;
+begin
+    dbms_output.put_line('Comenzi intre 10-15 mai 2023 cu totatul de plata mai mic de 3000');
+    dbms_output.put_line('si costul de transport mai mic de -10.');
+    dbms_output.new_line;
+    solutie := filtrare_comenzi(to_date('10-may-2022', 'dd-mon-yyyy'),to_date('15-may-2022', 'dd-mon-yyyy'),-10,3000);
+exception
+    when others then
+        dbms_output.put_line('Eroare cu codul '||SQLCODE|| ' si mesajul ' || SQLERRM);
+end;
+/
+
+-- caz5 exceptie cost_total_eroare
+-- caz in care costul total maximal este negativ
+declare
+    solutie t_id_com;
+begin
+    dbms_output.put_line('Comenzi intre 10-15 mai 2023 cu totatul de plata mai mic de -50');
+    dbms_output.put_line('si costul de transport mai mic de 200.');
+    dbms_output.new_line;
+    solutie := filtrare_comenzi(to_date('10-may-2022', 'dd-mon-yyyy'),to_date('15-may-2022', 'dd-mon-yyyy'),200,-50);
+exception
+    when others then
+        dbms_output.put_line('Eroare cu codul '||SQLCODE|| ' si mesajul ' || SQLERRM);
+end;
+/
