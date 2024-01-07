@@ -999,3 +999,91 @@ exception
     dbms_output.put_line('Eroare cu codul '||SQLCODE|| ' si mesajul ' || SQLERRM);
 end;
 /
+
+-- Cerinta 10
+-- trigger LMD la nivel de comanda care nu permite executarea unui comenzi
+-- pe tabelul angajati intre orele 01:00 - 03:00 in ziua de 8 si 9 a
+-- lunilor in intervalul [1,9].
+
+create or replace trigger check_angajati
+    before insert or delete or update on angajati
+declare
+    valid number := 1;
+begin
+    for i in 1..9 loop
+        if to_char(sysdate,'dd/mm') = '08/0' || i or to_char(sysdate,'dd/mm') = '07/0' || i then
+            valid := 0;
+        end if;
+    end loop;
+    if to_char(sysdate, 'hh24') between 1 and 3
+        then valid := 0;
+    end if;
+    
+    if valid = 0 then
+        if inserting then
+            raise_application_error(-20000,'Inserati date mai tarziu!');
+        elsif deleting then
+            raise_application_error(-20001,'Stergeti date mai tarziu!');
+        else
+            raise_application_error(-20002,'Modificati date mai tarziu!');
+        end if;
+    end if;
+end;
+/
+
+-- inserare
+insert into angajati
+values (secventa_techflow.nextval, 'Gabroveanu', 'Ion', 'gabroveanu.ion@example.com', 2500.00, 'Casier', 1);
+
+-- stergere
+delete from angajati where id_angajat = 6;
+
+-- modificare
+update angajati
+set id_angajat = 1000
+where id_angajat = 7;
+
+-- Cerinta 11
+
+create table info_categorii
+(id number(3) primary key,
+nume_categorie varchar2(50),
+suma_totala number);
+
+insert into info_categorii
+select c.id_categorie,c.nume_categorie,nvl(sum(p.pret_produs),0)
+from categorii c, produse p
+where c.id_categorie = p.id_categorie(+)
+group by c.id_categorie,c.nume_categorie;
+
+select * from info_categorii;
+
+create or replace procedure modificare_suma_categorii
+    ( v_id info_categorii.id%type,
+      v_suma_totala info_categorii.suma_totala%type
+    ) as
+begin
+    update info_categorii
+    set suma_totala = nvl(suma_totala,0) + v_suma_totala
+    where id = v_id;
+end;
+/
+
+create or replace trigger lmd_pret_produs
+    after delete or update or insert of pret_produs 
+    on produse
+    for each row
+begin
+    
+    if deleting then
+        -- stergerea unui produs
+        modificare_suma_categorii(:old.id_categorie,-1*:old.pret_produs);
+    elsif updating then
+        -- modificarea unui produs
+        modificare_suma_categorii(:old.id_categorie,:new.pret_produs-:old.pret_produs);
+    else
+        -- adaugarea unui produs
+        modificare_suma_categorii(:new.id_categorie,:new.pret_produs);
+    end if;
+end;
+/
