@@ -430,6 +430,12 @@ VALUES (secventa_techflow.nextval, 'Florescu', 'Valentin', 'valentin.florescu@ex
 insert into clienti
 VALUES (secventa_techflow.nextval, 'Gheorghe', 'Cristina', 'cristina.gheorghe@example.com', '0710123456', TO_DATE('2023-03-12', 'YYYY-MM-DD'));
 
+insert into clienti
+VALUES (secventa_techflow.nextval, 'Popescu', 'Mihai', 'popescu.mihai@example.com', '0710121245', TO_DATE('2024-01-02', 'YYYY-MM-DD'));
+
+insert into clienti
+VALUES (secventa_techflow.nextval, 'Pop', 'Alexandra', 'pop.alexandra@example.com', '0710131245', TO_DATE('2024-01-04', 'YYYY-MM-DD'));
+
 select * from clienti;
 
 -- 10 tabel COMENZI
@@ -890,5 +896,106 @@ begin
 exception
     when others then
         dbms_output.put_line('Eroare cu codul '||SQLCODE|| ' si mesajul ' || SQLERRM);
+end;
+/
+
+-- Cerinta 9
+-- Definiti un subprogram stocat de tip procedura care sa afiseze numarul de recenzii
+-- ,numarul de produse in wishlist,numarul de comenzi si numarul de produse din comenzile
+-- neanulate ale clientului al caror nume este dat.
+-- De asemenea, sa se afiseze numele si prenumele clientului.
+
+create or replace procedure clienti_info(v_nume_client clienti.nume_client%type)
+is
+  type info_rec is record (
+                        nr_recenzii integer,
+                        nr_wishlist integer,
+                        nr_comenzi integer,
+                        nr_produse_neanulate integer,
+                        nume_client clienti.nume_client%type,
+                        prenume_client clienti.prenume_client%type
+                        );
+  l_info info_rec; 
+
+  type nume_client_imbr is table of clienti.nume_client%type;
+  t_nume_client nume_client_imbr := nume_client_imbr();
+  
+begin
+  select nume_client bulk collect into t_nume_client
+  from clienti
+  where nume_client like v_nume_client || '%';
+  
+  if t_nume_client.count = 0 then
+    raise no_data_found;
+  elsif t_nume_client.count > 1 then
+    raise too_many_rows;
+  else
+    dbms_output.put_line('Informatii client: ');
+    dbms_output.new_line;
+    
+    -- 6 tabele intr-o comanda sql
+    select
+    (select count(*) from recenzii r 
+     join clienti cl on (cl.id_client = r.id_client) 
+     where cl.nume_client like v_nume_client
+     )as nr_recenzii,
+     (select count(*) from wishlist w 
+     join clienti cl on (cl.id_client = w.id_client) 
+     where cl.nume_client like v_nume_client) as nr_wishlist,
+     (select count(*) from comenzi c 
+     join clienti cl on (cl.id_client = c.id_client) 
+     where cl.nume_client like v_nume_client)as nr_comenzi,
+     (select count(*) from produse p
+     join produse_comenzi pc on (pc.id_produs = p.id_produs)
+     join comenzi c on (c.id_comanda = pc.id_comanda)
+     join clienti cl on (cl.id_client = c.id_client)
+     where cl.nume_client like v_nume_client and c.status_comanda <> 'Anulata'
+     ) as nr_produse_neanulate,
+     cl.nume_client,cl.prenume_client into l_info
+    from clienti cl
+    where cl.nume_client like v_nume_client;
+    
+    dbms_output.put_line('Nume: ' || l_info.nume_client);
+    dbms_output.put_line('Prenume: ' || l_info.prenume_client);
+    dbms_output.new_line;
+    dbms_output.put_line('Numar recenzii: ' || l_info.nr_recenzii);
+    dbms_output.put_line('Numar produse wishlist: ' || l_info.nr_wishlist);
+    dbms_output.put_line('Numar comenzi: ' || l_info.nr_comenzi);
+    dbms_output.put_line('Numar produse din comenzile neanulate: ' || l_info.nr_produse_neanulate);
+  end if;
+exception
+    when no_data_found then
+        raise_application_error(-20000,'Nu exista client cu acest nume!');
+    when too_many_rows then
+        raise_application_error(-20001,'Prea multi clienti cu acest string!');
+    when others then
+        raise_application_error(-20002,'Alta eroare!');
+end clienti_info;
+/  
+
+-- caz 1 apel corect
+begin
+ clienti_info('Avram');
+exception
+ when others then
+    dbms_output.put_line('Eroare cu codul '||SQLCODE|| ' si mesajul ' || SQLERRM);
+end;
+/
+
+-- caz 2 no_data_found (nu exista cu client cu acest nume)
+begin
+ clienti_info('Huma');
+exception
+ when others then
+    dbms_output.put_line('Eroare cu codul '||SQLCODE|| ' si mesajul ' || SQLERRM);
+end;
+/
+
+-- caz 3 too_many_rows (pentru Pop => exista Popa si Popescu)
+begin
+ clienti_info('Pop');
+exception
+ when others then
+    dbms_output.put_line('Eroare cu codul '||SQLCODE|| ' si mesajul ' || SQLERRM);
 end;
 /
