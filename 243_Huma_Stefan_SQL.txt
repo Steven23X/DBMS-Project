@@ -1043,13 +1043,23 @@ update angajati
 set id_angajat = 1000
 where id_angajat = 7;
 
+
 -- Cerinta 11
 
+-- Varianta 1
+-- (se va folosi o procedura in trigger)
+-- Trigger LMD la nivel de linie care va actualiza automat campul suma_totala
+-- din tabelul info_categorii cand se introduce un nou produs, se sterge un produs
+-- sau se modifica pretul produsului
+
+-- Tabel info_categorii in care suma_totala reprezinta suma preturilor
+-- produselor din categoria respectiva
 create table info_categorii
 (id number(3) primary key,
 nume_categorie varchar2(50),
 suma_totala number);
 
+-- adaugare date in tabel
 insert into info_categorii
 select c.id_categorie,c.nume_categorie,nvl(sum(p.pret_produs),0)
 from categorii c, produse p
@@ -1058,6 +1068,7 @@ group by c.id_categorie,c.nume_categorie;
 
 select * from info_categorii;
 
+-- procedura care actualizeaza suma_totala din info_categorii
 create or replace procedure modificare_suma_categorii
     ( v_id info_categorii.id%type,
       v_suma_totala info_categorii.suma_totala%type
@@ -1069,6 +1080,7 @@ begin
 end;
 /
 
+-- trigger LMD
 create or replace trigger lmd_pret_produs
     after delete or update or insert of pret_produs 
     on produse
@@ -1087,3 +1099,101 @@ begin
     end if;
 end;
 /
+select * from info_categorii;
+select * from produse;
+
+-- stergere produs
+delete from produse where id_produs = 75;
+
+-- modificare produs
+update produse
+set pret_produs = 1999.99
+where id_produs = 27;
+
+-- adaugare produs
+insert into produse
+values (secventa_techflow.nextval, 'Microfon Test', '-', 1799.99, 25, 16, 71);
+
+-- Varianta 2
+-- (trigger pe tabela mutating)
+-- Trigger LMD la nivel de linie care sa nu permita ca un client sa aiba mai mult
+-- de 2 comenzi.
+
+create or replace trigger check_comenzi
+    before insert or update of id_client on comenzi
+    for each row
+declare
+    numar_comenzi number;
+begin
+    select count(*) into numar_comenzi
+    from comenzi
+    where id_client = :new.id_client;
+    
+    if numar_comenzi = 2 then
+        raise_application_error(-20005,'Clientul are deja 2 comenzi in desfasurare!');
+    end if;
+end;
+/
+select * from clienti;
+select * from comenzi;
+
+-- nu se declanseaza triggerul deoarece clientul are 0 comenzi
+insert into comenzi
+values (secventa_techflow.nextval, sysdate, 'Noua', 72, 36, 42);
+
+-- clientul are numarul maxim de comenzi
+insert into comenzi
+values (secventa_techflow.nextval, sysdate, 'Noua', 46, 38, 44);
+
+-- eroare mutating
+-- clientul are 0 comenzi dar insert into + select genereaza eroare
+insert into comenzi
+select secventa_techflow.nextval, sysdate, 'Noua', 73, 37, 42
+from dual;
+
+-- rezolvarea erorii de tabel mutating
+
+create or replace package pachet_check_comenzi
+as
+    type com_rec_pachet is record ( id_client clienti.id_client%type,
+                             numar_comenzi number(1));
+    type com_idx is table of com_rec_pachet index by pls_integer;
+    comenzi com_idx;
+    contor number(1) :=0;
+end;
+/
+
+create or replace trigger check_comenzi_comanda
+    before insert or update of id_client on comenzi
+begin
+    pachet_check_comenzi.contor := 0;
+    
+    select id_client, count(*) bulk collect into pachet_check_comenzi.comenzi
+    from comenzi
+    group by id_client;
+end;
+/
+
+create or replace trigger check_comenzi_linie
+    before insert or update of id_client on comenzi
+    for each row
+begin
+    for i in 1..pachet_check_comenzi.comenzi.last loop
+        if pachet_check_comenzi.comenzi(i).numar_comenzi +
+           pachet_check_comenzi.contor = 2
+           and pachet_check_comenzi.comenzi(i).id_client = :new.id_client
+        then
+            raise_application_error(-20005,'Clientul are deja 2 comenzi in desfasurare!');
+        end if;
+    end loop;
+    
+    pachet_check_comenzi.contor := pachet_check_comenzi.contor + 1;
+end;
+/
+
+alter trigger proiect.check_comenzi disable;
+
+-- acum se declanseaza triggerul
+insert into comenzi
+select secventa_techflow.nextval, sysdate, 'Noua', 73, 37, 42
+from dual;
