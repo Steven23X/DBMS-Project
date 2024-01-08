@@ -1236,3 +1236,5 @@ drop table tabel_test;
 select * from audit_user;
 
 create table tabel_weekend (valoare number);
+
+-- Cerinta 14
