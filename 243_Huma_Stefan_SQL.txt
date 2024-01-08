@@ -1197,3 +1197,42 @@ alter trigger proiect.check_comenzi disable;
 insert into comenzi
 select secventa_techflow.nextval, sysdate, 'Noua', 73, 37, 42
 from dual;
+
+-- Cerinta 12
+
+-- Trigger LDD care blocheaza adaugarea/stergerea/modificarea tabelelor
+-- in zilele de sambata si duminica. Daca se realizeaza o operatie atunci
+-- informatiile sunt inserate in tabelul audit_user
+
+create table audit_user
+        (nume_bd varchar2(50),
+        user_logat varchar2(30),
+        eveniment varchar2(20),
+        tip_obiect_referit varchar2(30),
+        nume_obiect_referit varchar2(30),
+        data timestamp(3));
+
+create or replace trigger check_schema
+    after create or drop or alter on schema
+begin
+    if to_char(sysdate,'day') = 'sunday' or to_char(sysdate,'day') = 'saturday'
+    then
+        raise_application_error(-20000,'Nu se pot face operatii LDD in weekend!');
+    end if;
+    
+    insert into audit_user
+    values (sys.database_name, sys.login_user,
+    sys.sysevent, sys.dictionary_obj_type,
+    sys.dictionary_obj_name, systimestamp(3));
+end;
+/
+
+create table tabel_test (valoare number);
+
+alter table tabel_test add (alta_valoare number);
+
+drop table tabel_test;
+
+select * from audit_user;
+
+create table tabel_weekend (valoare number);
