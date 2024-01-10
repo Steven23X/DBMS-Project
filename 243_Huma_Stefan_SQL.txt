@@ -1238,3 +1238,142 @@ select * from audit_user;
 create table tabel_weekend (valoare number);
 
 -- Cerinta 14
+select * from angajati;
+select * from magazine;
+
+create or replace package pachet_angajati_magazine
+as
+    -- record info angajati
+    type ang_rec is record
+         (id angajati.id_angajat%type,
+          nume angajati.nume_angajat%type,
+          prenume angajati.prenume_angajat%type,
+          salariu angajati.salariu_angajat%type,
+          job angajati.job_angajat%type);
+    -- record info magazine
+    type mag_rec is record
+        (id magazine.id_magazin%type,
+        nume magazine.nume_magazin%type,
+        adresa magazine.adresa_magazin%type
+        );
+        
+    -- tablou angajati      
+    type t_ang is table of ang_rec
+    index by binary_integer;
+    
+    vec_angajati t_ang;
+    rec_angajati ang_rec;
+    rec_magazine mag_rec;
+    -- cursor pentru angajati
+    cursor ang_mag(v_nume_magazin magazine.nume_magazin%type) return ang_rec;
+    
+    -- cursor magazine
+    cursor nume_magazine return mag_rec;
+    
+    -- returneaza suma salariilor angajatilor dintr-un magazin dat
+    -- pe un numar de luni dat
+    function bilant_magazin(v_nume_magazin magazine.nume_magazin%type,v_luni number)
+        return number;
+    -- returneaza suma salariilor angajatilor din toate magazinele
+    -- pe un numar de luni dat
+    function bilant_magazin(v_luni number)
+        return number;
+    
+    -- afiseaza suma salariilor angajatilor din toate magazinele
+    -- pe 12 luni
+    procedure afisare_bilant_anual;
+    
+    -- afiseaza suma salariilor angajatilor dintr-un magazin dat
+    -- pe 12 luni
+    procedure afisare_bilant_anual(v_nume_magazin magazine.nume_magazin%type);
+    
+    -- afiseaza suma salariilor angajatilor din toate magazinele
+    -- pe 6 luni
+    procedure afisare_bilant_semestrial;
+    
+    -- afiseaza suma salariilor angajatilor dintr-un magazin dat
+    -- pe 6 luni
+    procedure afisare_bilant_semestrial(v_nume_magazin magazine.nume_magazin%type);
+    
+end pachet_angajati_magazine;
+/
+create or replace package body pachet_angajati_magazine
+as
+    cursor ang_mag(v_nume_magazin magazine.nume_magazin%type) 
+    return ang_rec
+    is select a.id_angajat, a.nume_angajat, a.prenume_angajat,a.salariu_angajat,a.job_angajat
+    from angajati a join magazine m on (a.id_magazin =m.id_magazin)
+    where m.nume_magazin = v_nume_magazin;
+    
+    cursor nume_magazine return mag_rec
+    is select id_magazin,nume_magazin,adresa_magazin
+    from magazine;
+    
+    function bilant_magazin(v_nume_magazin magazine.nume_magazin%type,v_luni number) return number
+    is suma number;
+    begin
+        suma := 0;
+        open ang_mag(v_nume_magazin);
+        loop
+            fetch ang_mag into rec_angajati;
+            exit when ang_mag%notfound;
+            suma := suma + rec_angajati.salariu * v_luni;
+        end loop;
+        close ang_mag;
+    return suma;
+    end bilant_magazin;
+    
+    function bilant_magazin(v_luni number) return number
+    is suma number;
+    begin
+        suma := 0;
+        open nume_magazine;
+        loop
+            fetch nume_magazine into rec_magazine;
+            exit when nume_magazine%notfound;
+            suma := suma + bilant_magazin(rec_magazine.nume,v_luni);
+        end loop;
+        close nume_magazine;
+    return suma;
+    end bilant_magazin;
+    
+    procedure afisare_bilant_anual is
+        bilant number := bilant_magazin(12);
+    begin
+        dbms_output.put_line('Bilantul anual pentru Compania TechFlow este: ');
+        dbms_output.put_line(bilant || ' $');
+    end afisare_bilant_anual;
+    
+    procedure afisare_bilant_semestrial is
+        bilant number := bilant_magazin(6);
+    begin
+        dbms_output.put_line('Bilantul semestrial pentru Compania TechFlow este: ');
+        dbms_output.put_line(bilant || ' $');
+    end afisare_bilant_semestrial;
+    
+    procedure afisare_bilant_anual(v_nume_magazin magazine.nume_magazin%type) is
+        bilant number := bilant_magazin(v_nume_magazin,12);
+    begin
+        dbms_output.put_line('Bilantul anual pentru magazinul ' || v_nume_magazin || ' este: ');
+        dbms_output.put_line(bilant || ' $');
+    end afisare_bilant_anual;
+
+    procedure afisare_bilant_semestrial(v_nume_magazin magazine.nume_magazin%type) is
+        bilant number := bilant_magazin(v_nume_magazin,6);
+    begin
+        dbms_output.put_line('Bilantul semestrial pentru magazinul ' || v_nume_magazin || ' este: ');
+        dbms_output.put_line(bilant || ' $');
+    end afisare_bilant_semestrial;
+    
+end pachet_angajati_magazine;
+/
+
+begin
+    pachet_angajati_magazine.afisare_bilant_anual();
+    pachet_angajati_magazine.afisare_bilant_semestrial();
+    
+    for i in pachet_angajati_magazine.nume_magazine loop
+        pachet_angajati_magazine.afisare_bilant_anual(i.nume);
+        pachet_angajati_magazine.afisare_bilant_semestrial(i.nume);
+    end loop;
+end;
